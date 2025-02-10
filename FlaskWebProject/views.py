@@ -23,7 +23,7 @@ def home():
     posts = Post.query.all()
 
     # Log when home page is loaded
-    app.logger.info('Loading homepage, testing logging...')
+    app.logger.info('Loading homepage...')
     
     return render_template(
         'index.html',
@@ -65,22 +65,19 @@ def post(id):
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
+        # Log user already authenticated
+        app.logger.info('User is already authenticated.')
         return redirect(url_for('home'))
     form = LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.username.data).first()
         if user is None or not user.check_password(form.password.data):
-            # Add logging for failed login
-            app.logger.warning('Failed Login')
-
             flash('Invalid username or password')
             return redirect(url_for('login'))
         login_user(user, remember=form.remember_me.data)
         next_page = request.args.get('next')
         if not next_page or url_parse(next_page).netloc != '':
             next_page = url_for('home')
-            # Add logging for sucess login
-            app.logger.warning('Successful Login')
         return redirect(next_page)
     session["state"] = str(uuid.uuid4())
     auth_url = _build_auth_url(scopes=Config.SCOPE, state=session["state"])
@@ -91,6 +88,8 @@ def authorized():
     if request.args.get('state') != session.get("state"):
         return redirect(url_for("home"))  # No-OP. Goes back to Index page
     if "error" in request.args:  # Authentication/Authorization failure
+        # Add logging for failed login
+        app.logger.info('Authentication or authorization failure.')
         return render_template("auth_error.html", result=request.args)
     if request.args.get('code'):
         cache = _load_cache()
@@ -102,6 +101,8 @@ def authorized():
         )
         ########################
         if "error" in result:
+            # Add logging for failed login
+            app.logger.info('Failed Login, could not authenticate user.')
             return render_template("auth_error.html", result=result)
         session["user"] = result.get("id_token_claims")
         # Note: In a real app, we'd use the 'name' property from session["user"] below
@@ -109,6 +110,8 @@ def authorized():
         user = User.query.filter_by(username="admin").first()
         login_user(user)
         _save_cache(cache)
+        # Add logging for sucessful login
+        app.logger.info('Successful Login')
     return redirect(url_for('home'))
 
 @app.route('/logout')
